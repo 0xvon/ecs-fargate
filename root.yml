@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  a Root Stack
+
+Parameters:
+  AppName:
+    Type: String
+
+  TemplateBucket:
+    Type: String
+
+  VpcCIDR:
+    Type: String
+
+  PublicSubnetACIDR:
+    Type: String
+
+  PublicSubnetCCIDR:
+    Type: String
+
+  PrivateSubnetACIDR:
+    Type: String
+
+  PrivateSubnetCCIDR:
+    Type: String
+
+  HeaderKey:
+    Type: String
+
+  DomainName:
+    Type: String
+
+  RecordName:
+    Type: String
+
+  CFSSLCertificateId:
+    Type: String
+
+Resources:
+  VPC:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/infrastructure/vpc.yml
+      Parameters:
+        AppName: !Ref  AppName
+        VpcCIDR: !Ref VpcCIDR
+        
+  PublicSubnets:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPC
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/infrastructure/public-subnets.yml
+      Parameters:
+        AppName: !Ref  AppName
+        PublicSubnetACIDR:  !Ref PublicSubnetACIDR
+        PublicSubnetCCIDR:  !Ref PublicSubnetCCIDR
+        VpcId: !GetAtt VPC.Outputs.VPC
+        GatewayId: !GetAtt VPC.Outputs.InternetGateway
+
+  SecurityGroups:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: PublicSubnets
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/infrastructure/security-groups.yml
+      Parameters:
+        AppName: !Ref AppName
+        VpcId: !GetAtt VPC.Outputs.VPC
+        VpcCIDR: !Ref VpcCIDR
+
+  LoadBalancer:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: SecurityGroups
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/infrastructure/load-balancer.yml
+      Parameters:
+        AppName: !Ref  AppName
+        VpcId: !GetAtt VPC.Outputs.VPC
+        PublicSubnetA: !GetAtt PublicSubnets.Outputs.PublicSubnetA
+        PublicSubnetC: !GetAtt PublicSubnets.Outputs.PublicSubnetC
+        SecurityGroup: !GetAtt SecurityGroups.Outputs.LoadBalancerSecurityGroup
+
+  CloudFront:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: LoadBalancer
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/infrastructure/cloudfront.yml
+      Parameters:
+        AppName: !Ref  AppName
+        DomainName: !Ref RecordName
+        Origin: !GetAtt LoadBalancer.Outputs.LoadBalancer
+        OriginDomainName: !GetAtt LoadBalancer.Outputs.LoadBalancerUrl
+        CFSSLCertificateId: !Ref CFSSLCertificateId
+        HeaderKey: !Ref HeaderKey
+
+  Route53:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/infrastructure/route53.yml
+      Parameters:
+        DomainName: !Sub ${DomainName}.
+        RecordName: !Sub ${RecordName}.
+        TTLNormal: "3600"
+        CloudFrontDomainName: !GetAtt CloudFront.Outputs.DomainName
+
+  Cluster:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: LoadBalancer
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/ecs-fargate/cluster.yml
+      Parameters:
+        AppName: !Ref AppName
+
+  TaskExecutionRole:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: Cluster
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/ecs-fargate/iam.yml
+      Parameters:
+        AppName: !Ref AppName
+
+  TaskDefinition:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: TaskExecutionRole
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/ecs-fargate/taskdefinition.yml
+      Parameters:
+        AppName: !Ref AppName
+        TaskExecutionRole: !GetAtt TaskExecutionRole.Outputs.ECSTaskExecutionRole
+
+  Service:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: TaskDefinition
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/ecs-fargate/service.yml
+      Parameters:
+        AppName: !Ref AppName
+        Cluster: !GetAtt Cluster.Outputs.ECSCluster
+        TaskName: !GetAtt TaskDefinition.Outputs.ECSTask
+        ContainerSecurityGroup: !GetAtt SecurityGroups.Outputs.ContainerSecurityGroup
+        VpcId: !GetAtt VPC.Outputs.VPC
+        Listener: !GetAtt LoadBalancer.Outputs.Listener
+        PublicSubnetA: !GetAtt PublicSubnets.Outputs.PublicSubnetA
+        PublicSubnetC: !GetAtt PublicSubnets.Outputs.PublicSubnetC
+        HeaderKey: !Ref HeaderKey
+
+  ECSAutoScaling:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: TaskDefinition
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3-ap-northeast-1.amazonaws.com/${AppName}/ecs-fargate/auto-scaling.yml
+      Parameters:
+        AppName: !Ref AppName
+        ServiceName: !Sub ${AppName}-service
+        Cluster: !GetAtt Cluster.Outputs.ECSCluster
+        ParserAutoScalingRoleArn: !GetAtt TaskExecutionRole.Outputs.ParserAutoScalingRole

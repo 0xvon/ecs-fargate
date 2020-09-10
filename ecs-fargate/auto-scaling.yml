@@ -1,0 +1,105 @@
+Parameters:
+    AppName:
+      Type: String
+
+    ServiceName:
+      Type: String
+
+    Cluster:
+      Type: String
+
+    ParserAutoScalingRoleArn:
+      Type: String
+
+Resources:
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 50
+      MinCapacity: 2
+      ResourceId: !Join ['/', [service, !Ref Cluster, !Ref ServiceName]]
+      RoleARN: !Ref ParserAutoScalingRoleArn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+  
+  CPUPAlarmScaleDown:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: 1
+      MetricName: CPUUtilization
+      Statistic: Maximum
+      Unit: Percent
+      Threshold: 30
+      TreatMissingData: notBreaching
+      AlarmDescription: Alarm if CPU is < 30%
+      ComparisonOperator: LessThanThreshold
+      Period: 60
+      AlarmActions:
+        - !Ref ServiceScalingDownPolicy
+      Namespace: AWS/ECS
+      Dimensions:
+        - Name: ClusterName
+          Value: !Sub ${AppName}-cluster
+        - Name: ServiceName
+          Value: !Ref ServiceName
+
+  CPUPAlarmScaleUp:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: 1 
+      TreatMissingData: notBreaching
+      AlarmDescription: Alarm if CPU is > 50%
+      Period: 60
+      MetricName: CPUUtilization
+      Statistic: Maximum
+      Unit: Percent
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 50
+      AlarmActions: 
+        - !Ref ServiceScalingUpPolicy
+      Namespace: AWS/ECS
+      Dimensions:
+        - Name: ClusterName
+          Value: !Sub ${AppName}-cluster
+        - Name: ServiceName
+          Value: !Ref ServiceName
+
+  ServiceScalingDownPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${AppName}-StepScalingDownPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+          - MetricIntervalUpperBound: 0
+            MetricIntervalLowerBound: -10
+            ScalingAdjustment: -4
+          - MetricIntervalUpperBound: -10
+            ScalingAdjustment: -20
+
+  ServiceScalingUpPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${AppName}-StepScalingUpPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 30
+        MetricAggregationType: Average
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            MetricIntervalUpperBound: 10
+            ScalingAdjustment: 1
+          - MetricIntervalLowerBound: 10
+            MetricIntervalUpperBound: 20
+            ScalingAdjustment: 2
+          - MetricIntervalLowerBound: 20
+            MetricIntervalUpperBound: 30
+            ScalingAdjustment: 4
+          - MetricIntervalLowerBound: 30
+            ScalingAdjustment: 10

@@ -1,0 +1,10 @@
+#!bin/sh
+
+. ./.env
+
+aws cloudformation deploy \
+    --template-file ./templates/s3.yml \
+    --stack-name templates-s3 \
+    --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM \
+    --parameter-overrides \
+        BucketName=${TEMPLATE_BUCKET}

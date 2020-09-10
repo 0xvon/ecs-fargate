@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  two public subnets
+
+Parameters:
+  AppName:
+    Type: String
+
+  PublicSubnetACIDR:
+    Type: String
+
+  PublicSubnetCCIDR:
+    Type: String
+
+  VpcId:
+    Type: String
+
+  GatewayId:
+    Type: String
+
+Resources:
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      MapPublicIpOnLaunch: true
+      CidrBlock: !Ref PublicSubnetACIDR
+      VpcId: !Ref VpcId 
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-public-subnet-a
+
+  PublicSubnetC:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: ap-northeast-1c
+      MapPublicIpOnLaunch: true
+      CidrBlock: !Ref PublicSubnetCCIDR
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-public-subnet-c"
+
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub "${AppName}-public-route"
+
+  PublicRoute:
+    Type: "AWS::EC2::Route"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      GatewayId: !Ref GatewayId
+      DestinationCidrBlock: 0.0.0.0/0
+
+  PublicSubnetRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociationC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      RouteTableId: !Ref PublicRouteTable
+
+Outputs:
+  PublicSubnetA:
+    Description: A reference to the created public subnet A
+    Value: !Ref PublicSubnetA
+    Export:
+      Name: !Sub "${AppName}-public-subnet-a"
+
+  PublicSubnetC:
+    Description: A reference to the created public subnet C
+    Value: !Ref PublicSubnetC
+    Export:
+      Name: !Sub "${AppName}-public-subnet-c"

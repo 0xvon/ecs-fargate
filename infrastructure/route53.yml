@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Route53 Domain A Record Set
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: ""
+
+  RecordName:
+    Type: String
+
+  TTLNormal:
+    Type: String
+
+  CloudFrontDomainName:
+    Type: String
+
+Resources:
+  ARecordAlias:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub "${DomainName}"
+      Name: !Sub "${RecordName}"
+      Type: A
+      AliasTarget:
+        DNSName: !Ref CloudFrontDomainName
+        HostedZoneId: Z2FDTNDATAQYW2

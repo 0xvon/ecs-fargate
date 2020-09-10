@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  a ECS TaskDefinition
+
+Parameters:
+  AppName:
+    Type: String
+
+  TaskExecutionRole:
+    Type: String
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/logs/${AppName}-LogGroup
+
+  ECSTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AppName}-NginxServer
+      Cpu: 2048
+      Memory: 4096
+      ExecutionRoleArn: !Ref TaskExecutionRole
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ContainerDefinitions:
+        - Name: nginx-server
+          Image: nginx:latest
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: ap-northeast-1
+              awslogs-stream-prefix: ecs
+          Ulimits:
+            - Name: nofile
+              SoftLimit: 65536
+              HardLimit: 65536
+          Cpu: 2048
+          Memory: 4096
+          PortMappings:
+            - HostPort: 80
+              Protocol: tcp
+              ContainerPort: 80
+          HealthCheck:
+            Command:
+              - "CMD-SHELL"
+              - "service nginx status || exit 1"
+            Interval: 30
+            Timeout: 10
+
+Outputs:
+  LogGroup:
+    Description: A reference to LogGroup
+    Value: !Ref LogGroup
+
+  ECSTask:
+    Description: A reference to Task
+    Value: !Ref ECSTask
+    Export:
+      Name: !Sub ${AppName}-Task
+

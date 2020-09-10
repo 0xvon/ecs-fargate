@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  two Security Groups
+
+Parameters:
+  AppName:
+    Type: String
+
+  VpcId:
+    Type: String
+
+  VpcCIDR:
+    Type: String
+
+Resources:
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: SecurityGroup for ALB
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-LoadBalancers
+
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Security Group for Task
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          IpProtocol: -1
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-ContainerSecurityGroup
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Enable MySQL access via user defined port
+      SecurityGroupIngress:
+        - CidrIp: !Ref VpcCIDR
+          FromPort: 3306
+          IpProtocol: tcp
+          ToPort: 3306
+
+Outputs:
+  LoadBalancerSecurityGroup:
+    Value: !Ref LoadBalancerSecurityGroup
+    Export:
+      Name: !Sub ${AppName}-LoadBalancerSecurityGroup
+
+  ContainerSecurityGroup:
+    Value: !Ref ContainerSecurityGroup
+    Export:
+      Name: !Sub ${AppName}-ContainerSecurityGroup
+  
+  RDSSecurityGroup:
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub ${AppName}-RDSSecurityGroup

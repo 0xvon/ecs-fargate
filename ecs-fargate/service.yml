@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  a ECS Service
+
+Parameters:
+  AppName:
+    Type: String
+
+  Cluster:
+    Type: String
+
+  TaskName:
+    Type: String
+  
+  ContainerSecurityGroup:
+    Type: String
+
+  VpcId:
+    Type: String
+
+  Listener:
+    Type: String
+
+  PublicSubnetA:
+    Type: String
+  
+  PublicSubnetC:
+    Type: String
+
+  HeaderKey:
+    Type: String
+
+Resources:
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: ListenerRule
+    Properties:
+      ServiceName: !Sub "${AppName}-service"
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskName
+      LaunchType: FARGATE
+      DesiredCount: 2
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 70
+      LoadBalancers:
+        - TargetGroupArn: !Ref TargetGroup
+          ContainerPort: 80
+          ContainerName: nginx-server
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups: 
+            - !Ref ContainerSecurityGroup
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetC
+          AssignPublicIp: ENABLED
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${AppName}-TG
+      VpcId: !Ref VpcId
+      Port: 80
+      Protocol: HTTP
+      Matcher:
+        HttpCode: 200-299
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 10
+      TargetType: ip
+
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref Listener
+      Priority: 1
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - '*'
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: User-agent
+            Values:
+                - Amazon CloudFront
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: x-pre-shared-key
+            Values:
+                - !Ref HeaderKey
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+
+Outputs:
+  Service:
+    Description: A reference to the service
+    Value: !Ref Service

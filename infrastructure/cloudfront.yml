@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  a CloudFront Distribution
+
+Parameters:
+  AppName:
+    Type: String
+
+  DomainName:
+    Type: String
+
+  Origin:
+    Type: String
+
+  OriginDomainName:
+    Type: String
+
+  CFSSLCertificateId:
+    Type: String
+
+  HeaderKey:
+    Type: String
+
+Resources:
+  LogBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub "${AppName}-log"
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases: 
+          - !Ref DomainName
+        Origins:
+          - DomainName: !Ref OriginDomainName
+            Id: !Ref Origin
+            CustomOriginConfig:
+              HTTPPort: 80
+              OriginProtocolPolicy: http-only
+              OriginKeepaliveTimeout: 60
+              OriginReadTimeout: 60
+            OriginCustomHeaders:
+              - HeaderName: x-pre-shared-key
+                HeaderValue: !Ref HeaderKey
+        Enabled: true
+        Logging:
+          IncludeCookies: true
+          Bucket: !Sub ${AppName}-log.s3.amazonaws.com
+          Prefix: backend/cloudfront
+        DefaultCacheBehavior:
+          TargetOriginId: !Ref Origin
+          SmoothStreaming: false
+          DefaultTTL: 0
+          MaxTTL: 0
+          MinTTL: 0
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: all
+            Headers:
+              - Origin
+              - Access-Control-Request-Headers
+              - Access-Control-Request-Method
+              - Authorization
+          ViewerProtocolPolicy: allow-all
+        PriceClass: PriceClass_200
+        Restrictions:
+          GeoRestriction:
+            RestrictionType: whitelist
+            Locations:
+              - JP
+              - US
+        ViewerCertificate:
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.1_2016
+          AcmCertificateArn: !Sub "arn:aws:acm:us-east-1:${AWS::AccountId}:certificate/${CFSSLCertificateId}"
+
+Outputs:
+  DistributionID:
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: !Sub ${AppName}-CloudFrontDistribution
+
+  DomainName:
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export:
+      Name: !Sub ${AppName}-CloudFrontDomainName

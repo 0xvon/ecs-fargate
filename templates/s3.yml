@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: S3 Bucket for Template yaml files
+
+Parameters:
+  BucketName:
+    Type: String
+
+Resources:
+  Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Ref BucketName
+
+Outputs:
+  BucketName:
+    Value: !Ref Bucket
+    Export:
+      Name: Bucket

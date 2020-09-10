@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  an Application Load Balancer.
+
+Parameters:
+  AppName:
+    Type: String
+
+  VpcId:
+    Type: String
+
+  PublicSubnetA:
+    Type: String
+
+  PublicSubnetC:
+    Type: String
+
+  SecurityGroup:
+    Type: String
+
+Resources:
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${AppName}-LoadBalancer
+      Subnets: 
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetC
+      SecurityGroups: 
+        - !Ref SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-LoadBalancer
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: 3600
+
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DefaultTargetGroup
+
+  DefaultTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${AppName}-DefaultTG
+      VpcId: !Ref VpcId
+      Port: 80
+      Protocol: HTTP
+
+Outputs:
+  LoadBalancer:
+    Description: A reference to the Application Load Balancer
+    Value: !Ref LoadBalancer
+    Export:
+      Name: !Sub ${AppName}-Loadbalancer
+
+  LoadBalancerUrl:
+    Description: The URL of the ALB
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub ${AppName}-DNSName
+
+  Listener:
+    Description: A reference to a port 80 listener
+    Value: !Ref LoadBalancerListener
+    Export:
+      Name: !Sub "${AppName}-Listener"
+
+  DefaultTargetGroup:
+    Value: !Ref DefaultTargetGroup
+    Export:
+      Name: !Sub "${AppName}-DefaultTG"

@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  a ECS Cluster
+
+Parameters:
+  AppName:
+    Type: String
+
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${AppName}-cluster
+
+Outputs:
+  ECSCluster:
+    Description: A referenc
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub ${AppName}-Cluster

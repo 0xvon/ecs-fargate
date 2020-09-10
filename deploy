@@ -1,0 +1,34 @@
+#!bin/sh
+
+# get environment variables
+. ./.env
+
+RECORD_NAME=${SUB_DOMAIN}.${DOMAIN_NAME}
+ENV=$1
+if [ ${ENV} != "prd" ]; then
+    APP_NAME=${ENV}-${APP_NAME}
+    RECORD_NAME=${ENV}-${RECORD_NAME}
+fi
+
+# upload templates to S3 Bucket
+aws s3 rm s3://${TEMPLATE_BUCKET}/${APP_NAME} --recursive
+aws s3 sync infrastructure/ s3://${TEMPLATE_BUCKET}/${APP_NAME}/infrastructure
+aws s3 sync ecs-fargate/ s3://${TEMPLATE_BUCKET}/${APP_NAME}/ecs-fargate
+
+# deploy
+aws cloudformation deploy \
+    --template-file root.yml \
+    --stack-name ${APP_NAME}-root-stack \
+    --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM \
+    --parameter-overrides \
+        TemplateBucket=${TEMPLATE_BUCKET} \
+        AppName=${APP_NAME} \
+        VpcCIDR=${VPC_CIDR} \
+        PublicSubnetACIDR=${PUBLIC_SUBNET_A_CIDR} \
+        PublicSubnetCCIDR=${PUBLIC_SUBNET_C_CIDR} \
+        PrivateSubnetACIDR=${PRIVATE_SUBNET_A_CIDR} \
+        PrivateSubnetCCIDR=${PRIVATE_SUBNET_C_CIDR} \
+        HeaderKey=${HEADER_KEY} \
+        DomainName=${DOMAIN_NAME} \
+        RecordName=${RECORD_NAME} \
+        CFSSLCertificateId=${CFSSLCertificateId} 
